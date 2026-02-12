@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import Image from 'next/image';
 
 import styled from '@emotion/styled';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -7,11 +8,14 @@ import * as yup from 'yup';
 
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
+import { Label } from '@/components/Label';
 import {
   POKEMON_NAME_ERROR_MESSAGE,
   TRAINER_AGE_ERROR_MESSAGE,
   TRAINER_NAME_ERROR_MESSAGE,
 } from '@/constants/error_messages';
+import { SuccessModal } from '@/features/SuccessModal';
+import { useGetPokemonDetailByIdQuery } from '@/lib/api/detail_pokemon_api';
 import { useSearchPokemonsQuery } from '@/lib/api/search_pokemon_api';
 import { breakpoints } from '@/utils/breakpoints';
 import { convertToUpperCase } from '@/utils/convert_to_upper_case';
@@ -52,6 +56,7 @@ const validationSchema = yup.object({
 
 export default function RegistrationForm({ currentDate }: RegistrationFormProps) {
   const [selectedPokemon, setSelectedPokemon] = useState<{ name: string; id: number } | null>(null);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -116,6 +121,13 @@ export default function RegistrationForm({ currentDate }: RegistrationFormProps)
     }
   }, [pokemonName]);
 
+  const { data: pokemonDetail, isLoading: isLoadingDetail } = useGetPokemonDetailByIdQuery(
+    selectedPokemon?.id ?? -1,
+    {
+      skip: !selectedPokemon?.id,
+    }
+  );
+
   const handlers = {
     pokemonSelect: (option: { value: string; label: string; id: number }) => {
       setValue('pokemonName', option.value, { shouldValidate: true });
@@ -127,10 +139,13 @@ export default function RegistrationForm({ currentDate }: RegistrationFormProps)
         setSelectedPokemon(null);
       }
     },
-    onSubmit: () => {},
+    onSubmit: () => {
+      setIsSuccessModalOpen(true);
+    },
     resetForm: () => {
       reset();
       setSelectedPokemon(null);
+      setIsSuccessModalOpen(false);
     },
   };
 
@@ -174,7 +189,38 @@ export default function RegistrationForm({ currentDate }: RegistrationFormProps)
             isLoading={isLoadingSearch}
             queryError={searchError}
           />
-          <div>{selectedPokemon?.name}</div>
+
+          <PokemonDisplayArea>
+            {!selectedPokemon ? (
+              <PlaceholderText>Your pokemon</PlaceholderText>
+            ) : isLoadingDetail ? (
+              <PlaceholderText>Loading pokemon details...</PlaceholderText>
+            ) : pokemonDetail ? (
+              <PokemonDisplayContent>
+                <PokemonSprite>
+                  <Image
+                    src={pokemonDetail.sprites?.front_default}
+                    alt={pokemonDetail.name}
+                    width={194}
+                    height={196}
+                  />
+                </PokemonSprite>
+                <PokemonInfoContainer>
+                  <PokemonName>Name: {convertToUpperCase(pokemonDetail.name ?? '')}</PokemonName>
+                  <PokemonInfo>
+                    Type:{' '}
+                    {pokemonDetail.types?.map(({ type }, index) => (
+                      <Label key={index}>{convertToUpperCase(type.name)}</Label>
+                    ))}
+                  </PokemonInfo>
+                  <PokemonInfo>Base experience: {pokemonDetail.base_experience}</PokemonInfo>
+                  <PokemonInfo>Id: {pokemonDetail.id}</PokemonInfo>
+                </PokemonInfoContainer>
+              </PokemonDisplayContent>
+            ) : (
+              <PlaceholderText>Your pokemon</PlaceholderText>
+            )}
+          </PokemonDisplayArea>
 
           <ButtonContainer>
             <Button type="button" variant="soft" onClick={handlers.resetForm}>
@@ -186,6 +232,7 @@ export default function RegistrationForm({ currentDate }: RegistrationFormProps)
           </ButtonContainer>
         </Form>
       </FormContainer>
+      <SuccessModal isOpen={isSuccessModalOpen} onReset={handlers.resetForm} />
     </>
   );
 }
@@ -224,6 +271,70 @@ const TwoColumnGrid = styled.div`
   gap: 24px;
 `;
 
+const PokemonDisplayArea = styled.div`
+  width: 100%;
+  min-height: 254px;
+  border: var(--colors-grey-400) 1px solid;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const PlaceholderText = styled.p`
+  color: var(--colors-grey-200);
+`;
+
+const PokemonDisplayContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px;
+  width: 100%;
+
+  @media (min-width: ${breakpoints.xs}) {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+  }
+`;
+
+const PokemonSprite = styled.div`
+  flex-shrink: 0;
+
+  @media (min-width: ${breakpoints.sm}) {
+    width: 194px;
+    height: 196px;
+  }
+`;
+
+const PokemonInfoContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+
+  @media (min-width: ${breakpoints.xs}) {
+    align-items: flex-start;
+  }
+`;
+
+const PokemonName = styled.div`
+  font-size: 14px;
+  color: var(--colors-grey-100);
+  margin: 0;
+`;
+
+const PokemonInfo = styled.div`
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  gap: 8px;
+  flex-wrap: wrap;
+`;
 const ButtonContainer = styled.div`
   display: flex;
   gap: 16px;
