@@ -3,8 +3,9 @@ import type { AppProps } from 'next/app';
 import Head from 'next/head';
 
 import EmotionRegistry from '@/lib/emotion-registry';
+import ReduxProvider from '@/lib/providers/ReduxProvider';
 
-import '../../../pokemon-registration/src/styles/globals.css';
+import '../styles/globals.css';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
@@ -12,9 +13,11 @@ export default function App({ Component, pageProps }: AppProps) {
       <Head>
         <title>Pokemon Registration Form</title>
       </Head>
-      <EmotionRegistry>
-        <Component {...pageProps} />
-      </EmotionRegistry>
+      <ReduxProvider>
+        <EmotionRegistry>
+          <Component {...pageProps} />
+        </EmotionRegistry>
+      </ReduxProvider>
     </>
   );
 }

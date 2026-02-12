@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import styled from '@emotion/styled';
@@ -12,7 +12,11 @@ import {
   TRAINER_AGE_ERROR_MESSAGE,
   TRAINER_NAME_ERROR_MESSAGE,
 } from '@/constants/error_messages';
+import { useSearchPokemonsQuery } from '@/lib/api/search_pokemon_api';
 import { breakpoints } from '@/utils/breakpoints';
+import { convertToUpperCase } from '@/utils/convert_to_upper_case';
+
+import AutocompleteInput, { AutocompleteOption } from '../components/AutocompleteInput';
 
 interface RegistrationFormProps {
   currentDate: string;
@@ -48,11 +52,15 @@ const validationSchema = yup.object({
 
 export default function RegistrationForm({ currentDate }: RegistrationFormProps) {
   const [selectedPokemon, setSelectedPokemon] = useState<{ name: string; id: number } | null>(null);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<FormData>({
     resolver: yupResolver(validationSchema),
@@ -63,9 +71,63 @@ export default function RegistrationForm({ currentDate }: RegistrationFormProps)
     },
   });
 
+  const pokemonName = watch('pokemonName');
+
+  const {
+    data: pokemonData,
+    isLoading: isLoadingSearch,
+    error: searchError,
+  } = useSearchPokemonsQuery(debouncedSearchTerm, {
+    skip: !debouncedSearchTerm.trim(),
+  });
+
+  const pokemonOptions: AutocompleteOption[] = useMemo(() => {
+    if (!debouncedSearchTerm.trim() || searchError || !pokemonData?.data) {
+      return [];
+    }
+
+    return pokemonData.data.map((result) => ({
+      value: result.item.name,
+      label: convertToUpperCase(result.item.name),
+      id: result.item.id,
+    }));
+  }, [pokemonData?.data, debouncedSearchTerm, searchError]);
+
+  useEffect(() => {
+    if (pokemonName?.trim()) {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
+      debounceTimerRef.current = setTimeout(() => {
+        setDebouncedSearchTerm(pokemonName.trim());
+      }, 300); // 300ms debounce
+
+      return () => {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+      };
+    } else {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      setDebouncedSearchTerm('');
+    }
+  }, [pokemonName]);
+
   const handlers = {
-    onSubmit: () => {
+    pokemonSelect: (option: { value: string; label: string; id: number }) => {
+      setValue('pokemonName', option.value, { shouldValidate: true });
+      setSelectedPokemon({ name: option.value, id: option.id });
     },
+    pokemonChange: (value: string) => {
+      setValue('pokemonName', value, { shouldValidate: true });
+      if (!value) {
+        setSelectedPokemon(null);
+      }
+    },
+    onSubmit: () => {},
     resetForm: () => {
       reset();
       setSelectedPokemon(null);
@@ -98,8 +160,22 @@ export default function RegistrationForm({ currentDate }: RegistrationFormProps)
               error={!!errors.trainerAge}
               errorMessage={errors.trainerAge?.message}
             />
-            <div>{selectedPokemon?.name}</div>
           </TwoColumnGrid>
+
+          <AutocompleteInput
+            value={pokemonName || ''}
+            onChange={handlers.pokemonChange}
+            onSelect={handlers.pokemonSelect}
+            placeholder="Choose"
+            label="Pokemon name"
+            error={!!errors.pokemonName}
+            errorMessage={errors.pokemonName?.message}
+            options={pokemonOptions}
+            isLoading={isLoadingSearch}
+            queryError={searchError}
+          />
+          <div>{selectedPokemon?.name}</div>
+
           <ButtonContainer>
             <Button type="button" variant="soft" onClick={handlers.resetForm}>
               Reset

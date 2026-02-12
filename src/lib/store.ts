@@ -6,8 +6,7 @@ export const store = configureStore({
   reducer: {
     [searchPokemonApi.reducerPath]: searchPokemonApi.reducer,
   },
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(searchPokemonApi.middleware),
+  middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(searchPokemonApi.middleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
